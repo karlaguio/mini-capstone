@@ -18,6 +18,11 @@ CENTER_X = 400
 CENTER_Y = 300
 FPS = 60
 
+# Difficulty tuning (pathogen pressure)
+INITIAL_PATHOGENS = 3
+SPAWN_INTERVAL_FRAMES = 180
+MAX_ACTIVE_PATHOGENS = 8
+
 # Colors
 WHITE = (255, 255, 255)
 RED = (255, 0, 0)
@@ -35,6 +40,7 @@ DARK_RED = (180, 0, 0)
 INITIAL_TISSUE_HEALTH = 10
 tissue_health = INITIAL_TISSUE_HEALTH
 TARGET_DESTROYS_TO_WIN = 20
+BINDING_THRESHOLD = 0.2
 
 
 class Pathogen(pygame.sprite.Sprite):
@@ -148,11 +154,30 @@ class Leukocyte(pygame.sprite.Sprite):
         # Receptor type: A float between 0.0 and 1.0 representing receptor specificity
         # This determines which pathogens this leukocyte can recognize and destroy
         self.receptor_type = receptor_type
+
+        # Store the exact antigen interval this leukocyte can bind to:
+        # |receptor - antigen| < 0.2  ->  antigen in (receptor-0.2, receptor+0.2)
+        self.binding_min = max(0.0, self.receptor_type - BINDING_THRESHOLD)
+        self.binding_max = min(1.0, self.receptor_type + BINDING_THRESHOLD)
+
+        # Color-code leukocyte by receptor band so the cell color matches 1/2/3 selection.
+        # This makes each placed cell's role obvious at a glance.
+        affinity_bands = [0.2, 0.5, 0.8]
+        nearest_band = min(affinity_bands, key=lambda value: abs(value - self.receptor_type))
+        if nearest_band == 0.2:
+            self.color = LIGHT_BLUE
+        elif nearest_band == 0.5:
+            self.color = MEDIUM_BLUE
+        else:
+            self.color = DARK_BLUE
         
         # Create blue circle surface
         self.radius = 15
         self.image = pygame.Surface((self.radius * 2, self.radius * 2), pygame.SRCALPHA)
-        pygame.draw.circle(self.image, BLUE, (self.radius, self.radius), self.radius)
+
+        # Fill with receptor color and add outline for contrast.
+        pygame.draw.circle(self.image, self.color, (self.radius, self.radius), self.radius)
+        pygame.draw.circle(self.image, BLACK, (self.radius, self.radius), self.radius, 2)
         
         self.rect = self.image.get_rect()
         self.rect.centerx = x
@@ -217,10 +242,6 @@ def check_affinity(leukocyte, pathogen):
     # This represents how well the receptor "fits" the antigen
     affinity_difference = abs(leukocyte.receptor_type - pathogen.antigen_type)
     
-    # Binding threshold: 0.2 represents the maximum difference for successful binding
-    # In biological terms, this is the "specificity threshold"
-    BINDING_THRESHOLD = 0.2
-    
     # If difference is small enough, binding occurs and pathogen is destroyed
     if affinity_difference < BINDING_THRESHOLD:
         return True  # Strong affinity - pathogen destroyed
@@ -272,8 +293,8 @@ if __name__ == "__main__":
         rect_x = ui_start_x + index * (ui_square_size + ui_gap)
         option_rects.append(pygame.Rect(rect_x, ui_y, ui_square_size, ui_square_size))
     
-    # Spawn initial pathogens
-    for _ in range(5):
+    # Spawn initial pathogens (reduced to make early game manageable)
+    for _ in range(INITIAL_PATHOGENS):
         pathogen = Pathogen()
         pathogens.add(pathogen)
         all_sprites.add(pathogen)
@@ -305,7 +326,7 @@ if __name__ == "__main__":
                     all_sprites.empty()
                     all_sprites.add(tissue)
 
-                    for _ in range(5):
+                    for _ in range(INITIAL_PATHOGENS):
                         pathogen = Pathogen()
                         pathogens.add(pathogen)
                         all_sprites.add(pathogen)
@@ -331,10 +352,12 @@ if __name__ == "__main__":
         
         # Spawn new pathogens periodically
         spawn_timer += 1
-        if spawn_timer > 120 and not game_over and not game_won:  # Every 2 seconds while game is active
-            pathogen = Pathogen()
-            pathogens.add(pathogen)
-            all_sprites.add(pathogen)
+        if spawn_timer > SPAWN_INTERVAL_FRAMES and not game_over and not game_won:
+            # Only spawn if below active-pathogen cap
+            if len(pathogens) < MAX_ACTIVE_PATHOGENS:
+                pathogen = Pathogen()
+                pathogens.add(pathogen)
+                all_sprites.add(pathogen)
             spawn_timer = 0
         
         # Update all sprites
@@ -413,7 +436,7 @@ if __name__ == "__main__":
         screen.blit(ui_help_text, (210, ui_y + 10))
 
         # Affinity legend for pathogen colors (nearest match guidance)
-        legend_text = font.render("Pathogen shades: Light≈0.2  Medium≈0.5  Dark≈0.8", True, BLACK)
+        legend_text = font.render("Pathogen shades: Light = 0.2  Medium = 0.5  Dark = 0.8", True, BLACK)
         screen.blit(legend_text, (210, ui_y - 18))
 
         debug_text = font.render(f"D: Antigen Labels {'ON' if show_antigen_labels else 'OFF'}", True, BLACK)
@@ -427,6 +450,20 @@ if __name__ == "__main__":
                 antigen_label = label_font.render(f"{pathogen.antigen_type:.2f}", True, BLACK)
                 label_rect = antigen_label.get_rect(center=(pathogen.rect.centerx, pathogen.rect.top - 8))
                 screen.blit(antigen_label, label_rect)
+
+        # Show each leukocyte's receptor and capture interval directly above it.
+        # Example: R0.5 [0.3-0.7] means this cell destroys pathogens with antigen in that range.
+        leukocyte_label_font = pygame.font.Font(None, 18)
+        for leukocyte in leukocytes:
+            range_text = (
+                f"R{leukocyte.receptor_type:.1f} "
+                f"[{leukocyte.binding_min:.1f}-{leukocyte.binding_max:.1f}]"
+            )
+            leukocyte_label = leukocyte_label_font.render(range_text, True, BLACK)
+            leukocyte_label_rect = leukocyte_label.get_rect(
+                center=(leukocyte.rect.centerx, leukocyte.rect.top - 10)
+            )
+            screen.blit(leukocyte_label, leukocyte_label_rect)
 
         if game_over:
             game_over_text = title_font.render("GAME OVER", True, RED)
