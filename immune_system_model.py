@@ -1,7 +1,7 @@
 """
 Immune Command: Final Visual Update
 A Pygame-based Agent-Based Model (ABM) simulating adaptive immunity, 
-viral evolution, and autoimmune constraints using 2D image sprites.
+viral evolution, and autoimmune constraints using 2D images.
 """
 
 import pygame
@@ -21,7 +21,7 @@ CENTER_Y = 300
 FPS = 60
 BINDING_THRESHOLD = 0.15 # Strict threshold to require strategy
 
-# Colors (Still used for text/UI)
+# Colors 
 WHITE = (255, 255, 255)
 BLACK = (0, 0, 0)
 GREEN = (34, 177, 76)
@@ -95,8 +95,10 @@ class Leukocyte(pygame.sprite.Sprite):
         super().__init__()
         self.receptor_type = receptor_type
         self.radius = 15
-        self.health = 900  # Health in frames (~15 seconds at 60 FPS)
-        self.health_decay = 1  # Lose 1 health per frame
+        # Health in frames (~15 seconds at 60 FPS)
+        self.health = 900
+        # Lose 1 health per frame
+        self.health_decay = 1  
         
         # Select appropriate image based on selected receptor
         if self.receptor_type == 0.2:
@@ -126,7 +128,8 @@ class Tissue(pygame.sprite.Sprite):
     """Central tissue to defend, using custom sprite."""
     def __init__(self):
         super().__init__()
-        self.radius = 45 # Slightly larger for the central base
+        # Slightly larger for the central base
+        self.radius = 45 
         
         try:
             raw_img = pygame.image.load('tissue.png').convert_alpha()
@@ -138,7 +141,7 @@ class Tissue(pygame.sprite.Sprite):
             
         self.rect = self.image.get_rect(center=(CENTER_X, CENTER_Y))
 
-# --- Main Game Loop ---
+# THIS IS THE MAIN GAME LOOP
 async def main():
     screen = pygame.display.set_mode((SCREEN_WIDTH, SCREEN_HEIGHT))
     pygame.display.set_caption("Immune Command - Final Capstone")
@@ -153,9 +156,8 @@ async def main():
         background_img = None
 
     # UI Fonts
-    # Tip: If you downloaded a cute font, change 'None' to 'YourFontName.ttf'
-    font = pygame.font.Font(None, 24)
-    large_font = pygame.font.Font(None, 48)
+    font = pygame.font.Font('SairaStencil-Medium.ttf', 24)
+    large_font = pygame.font.Font('SairaStencil-Medium.ttf', 48)
 
     all_sprites, pathogens, leukocytes = pygame.sprite.Group(), pygame.sprite.Group(), pygame.sprite.Group()
     tissue = Tissue()
@@ -165,7 +167,8 @@ async def main():
     destroyed_count = 0
     atp = 100
     current_selected_affinity = 0.5
-    game_state = "INSTRUCTIONS"  # INSTRUCTIONS, START, PLAYING, WON, LOST
+    # INSTRUCTIONS, START, PLAYING, WON, LOST
+    game_state = "INSTRUCTIONS"  
 
     # UI Options
     options = [
@@ -176,15 +179,17 @@ async def main():
 
     atp_timer = 0
     spawn_timer = 0
+    forbidden_cell_alert_timer = 0  # For showing forbidden cell type message
 
     instructions_button_rect = pygame.Rect(CENTER_X - 130, SCREEN_HEIGHT - 95, 260, 56)
     start_button_rect = pygame.Rect(CENTER_X - 100, CENTER_Y + 40, 200, 56)
-    restart_button_rect = pygame.Rect(CENTER_X - 120, CENTER_Y + 50, 240, 56)
+    restart_button_rect = pygame.Rect(CENTER_X - 120, SCREEN_HEIGHT - 50, 240, 56)
 
     def reset_round_state():
         """Reset all gameplay state for a fresh run."""
         nonlocal tissue, tissue_health, destroyed_count, atp
-        nonlocal current_selected_affinity, game_state, atp_timer, spawn_timer
+        nonlocal current_selected_affinity, game_state, atp_timer, spawn_timer, forbidden_cell_alert_timer
+        forbidden_cell_alert_timer = 0
 
         all_sprites.empty()
         pathogens.empty()
@@ -239,7 +244,7 @@ async def main():
                         # AUTOIMMUNITY MECHANIC: Tissue is 0.5. Placing 0.5 damages tissue.
                         if current_selected_affinity == 0.5:
                             tissue_health -= 3
-                            print("AUTOIMMUNE DAMAGE: Placed forbidden cell type!")
+                            forbidden_cell_alert_timer = 120  # Show alert for 2 seconds at 60 FPS
 
         if game_state == "PLAYING":
             # Timers
@@ -247,6 +252,10 @@ async def main():
             if atp_timer >= 30: # 2 ATP per second
                 atp = min(MAX_ATP, atp + 1)
                 atp_timer = 0
+            
+            # Forbidden cell alert timer
+            if forbidden_cell_alert_timer > 0:
+                forbidden_cell_alert_timer -= 1
                 
             spawn_timer += 1
             if spawn_timer >= 150: # New pathogen every 2.5 seconds
@@ -295,6 +304,15 @@ async def main():
 
             screen.blit(font.render(f"Health: {tissue_health}  |  ATP: {atp}/{MAX_ATP}  |  Kills: {destroyed_count}/{TARGET_DESTROYS_TO_WIN}", True, BLACK), (10, 10))
             screen.blit(font.render(f"Selected: {current_selected_affinity} (Cost: {CELL_COST} ATP)", True, BLACK), (10, 35))
+        
+        # Forbidden cell alert (in-game notification)
+        if game_state == "PLAYING" and forbidden_cell_alert_timer > 0:
+            alpha = int((forbidden_cell_alert_timer / 120) * 255)  # Fade out effect
+            alert_text = font.render("⚠ AUTOIMMUNE! Type 2 damages your tissue!", True, RED)
+            alert_surface = pygame.Surface((alert_text.get_width() + 20, alert_text.get_height() + 10), pygame.SRCALPHA)
+            pygame.draw.rect(alert_surface, (0, 0, 0, alpha), alert_surface.get_rect(), border_radius=5)
+            alert_surface.blit(alert_text, (10, 5))
+            screen.blit(alert_surface, (CENTER_X - alert_surface.get_width() // 2, SCREEN_HEIGHT - 120))
 
             help_bg = pygame.Surface((SCREEN_WIDTH, 30))
             help_bg.set_alpha(200)
@@ -338,9 +356,47 @@ async def main():
             screen.blit(start_text, start_text.get_rect(center=start_button_rect.center))
 
         if game_state == "WON":
-            screen.blit(large_font.render("TISSUE SAVED! INFECTION CLEARED.", True, GREEN), (100, CENTER_Y - 20))
+            win_line1 = large_font.render("TISSUE SAVED!", True, GREEN)
+            win_line2 = large_font.render("INFECTION CLEARED.", True, GREEN)
+            screen.blit(win_line1, win_line1.get_rect(center=(CENTER_X, CENTER_Y - 40)))
+            screen.blit(win_line2, win_line2.get_rect(center=(CENTER_X, CENTER_Y + 10)))
         elif game_state == "LOST":
-            screen.blit(large_font.render("SYSTEM FAILURE. TISSUE DESTROYED.", True, RED), (80, CENTER_Y - 40))
+            # White semi-transparent overlay for entire lost screen
+            overlay_surface = pygame.Surface((800, 500), pygame.SRCALPHA)
+            pygame.draw.rect(overlay_surface, (255, 255, 255, 220), overlay_surface.get_rect(), border_radius=10)
+            screen.blit(overlay_surface, (0, CENTER_Y - 150))
+            
+            # Title text on two lines for better fit
+            title_line1 = large_font.render("SYSTEM FAILURE.", True, RED)
+            title_line2 = large_font.render("TISSUE DESTROYED.", True, RED)
+            screen.blit(title_line1, title_line1.get_rect(center=(CENTER_X, CENTER_Y - 90)))
+            screen.blit(title_line2, title_line2.get_rect(center=(CENTER_X, CENTER_Y - 40)))
+            
+            # Educational information about game mechanics
+            small_font = pygame.font.Font(None, 18)
+            extra_small_font = pygame.font.Font(None, 16)
+            
+            # Title for educational section
+            screen.blit(font.render("What Happened: The Immunology Behind Your Loss", True, BLACK), (40, CENTER_Y + 20))
+            
+            # Stochastic Viral Adaptation (expanded)
+            screen.blit(small_font.render("Stochastic Viral Adaptation:", True, GREEN), (50, CENTER_Y + 50))
+            screen.blit(extra_small_font.render("Pathogens don't all spawn the same. They arrive with random 'antigen' values (0.0-1.0),", True, BLACK), (70, CENTER_Y + 70))
+            screen.blit(extra_small_font.render("creating natural diversity. When your leukocytes destroy them, survivors reproduce with", True, BLACK), (70, CENTER_Y + 85))
+            screen.blit(extra_small_font.render("mutated offspring, evolving toward your immune defenses. Adaptation is evolutionary.", True, BLACK), (70, CENTER_Y + 100))
+            
+            # Affinity Thresholds (expanded)
+            screen.blit(small_font.render("Affinity Thresholds (Binding Specificity):", True, GREEN), (50, CENTER_Y + 125))
+            screen.blit(extra_small_font.render("Your leukocytes only destroy pathogens when the 'fit' is perfect: |Receptor - Antigen| ≤ 0.15.", True, BLACK), (70, CENTER_Y + 145))
+            screen.blit(extra_small_font.render("Type 1 (0.2) targets pathogens near 0.2. Type 3 (0.8) targets near 0.8. Choose wisely!", True, BLACK), (70, CENTER_Y + 160))
+            
+            # Resource Constraint & Autoimmunity (expanded)
+            screen.blit(small_font.render("Resource Constraint & Autoimmunity Risk:", True, GREEN), (50, CENTER_Y + 185))
+            screen.blit(extra_small_font.render("ATP is limited. Type 2 (0.5) is dangerous: it damages your own tissue by 3 HP each time", True, BLACK), (70, CENTER_Y + 205))
+            screen.blit(extra_small_font.render("deployed! This represents autoimmune disease, your immune system attacking itself.", True, BLACK), (70, CENTER_Y + 220))
+            screen.blit(extra_small_font.render(" Balance offense, defense, and the cost of aggression.", True, BLACK), (70, CENTER_Y + 235))
+            
+            # Restart button (positioned at bottom)
             pygame.draw.rect(screen, GREEN, restart_button_rect, border_radius=10)
             pygame.draw.rect(screen, BLACK, restart_button_rect, 2, border_radius=10)
             restart_text = font.render("RESTART", True, WHITE)
