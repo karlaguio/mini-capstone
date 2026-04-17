@@ -155,9 +155,14 @@ async def main():
         print("ERROR: Could not find background.png. Using white background.")
         background_img = None
 
-    # UI Fonts
-    font = pygame.font.Font('SairaStencil-Medium.ttf', 24)
-    large_font = pygame.font.Font('SairaStencil-Medium.ttf', 48)
+    # UI Fonts - Try to load custom font, fallback to system font for web
+    try:
+        font = pygame.font.Font('SairaStencil-Medium.ttf', 24)
+        large_font = pygame.font.Font('SairaStencil-Medium.ttf', 48)
+    except (FileNotFoundError, pygame.error):
+        print("Custom font not found, using system font")
+        font = pygame.font.Font(None, 24)
+        large_font = pygame.font.Font(None, 48)
 
     all_sprites, pathogens, leukocytes = pygame.sprite.Group(), pygame.sprite.Group(), pygame.sprite.Group()
     tissue = Tissue()
